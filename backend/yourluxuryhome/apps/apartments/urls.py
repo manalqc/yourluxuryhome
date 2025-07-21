@@ -8,6 +8,7 @@ from .views import (
     ApartmentImageViewSet,
     ApartmentReviewViewSet
 )
+from .views_availability import ApartmentAvailabilityViewSet
 
 router = DefaultRouter()
 router.register(r'categories', ApartmentCategoryViewSet, basename='apartment-category')
@@ -15,6 +16,7 @@ router.register(r'amenities', ApartmentAmenityViewSet, basename='apartment-ameni
 router.register(r'apartments', ApartmentViewSet, basename='apartment')
 router.register(r'images', ApartmentImageViewSet, basename='apartment-image')
 router.register(r'reviews', ApartmentReviewViewSet, basename='apartment-review')
+router.register(r'availability', ApartmentAvailabilityViewSet, basename='apartment-availability')
 
 urlpatterns = [
     path('', include(router.urls)),

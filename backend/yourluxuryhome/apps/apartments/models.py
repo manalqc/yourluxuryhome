@@ -2,7 +2,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.utils.text import slugify
+from django.core.exceptions import ValidationError
 import uuid
+from datetime import date
 from apps.services.models import Service
 
 
@@ -118,4 +120,42 @@ class ApartmentReview(models.Model):
         unique_together = ['apartment', 'user']  # One review per user per apartment
     
     def __str__(self):
-        return f"{self.user.email}'s review for {self.apartment.name}"
+        return f"{self.user.username}'s review for {self.apartment.name}"
+
+
+class ApartmentAvailability(models.Model):
+    """Model to track apartment availability on specific dates."""
+    
+    STATUS_CHOICES = (
+        ('available', _('Available')),
+        ('pending', _('Pending')),
+        ('booked', _('Booked')),
+        ('maintenance', _('Maintenance')),
+    )
+    
+    apartment = models.ForeignKey(Apartment, on_delete=models.CASCADE, related_name='availability')
+    date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
+    price_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                        help_text=_('Override the default price for this date'))
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Apartment Availability')
+        verbose_name_plural = _('Apartment Availabilities')
+        ordering = ['date']
+        unique_together = ('apartment', 'date')
+    
+    def __str__(self):
+        return f"{self.apartment.name} - {self.date} - {self.get_status_display()}"
+    
+    def clean(self):
+        """Validate that the date is not in the past."""
+        if self.date < date.today():
+            raise ValidationError({'date': _('Cannot set availability for past dates')})
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

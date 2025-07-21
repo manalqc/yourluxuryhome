@@ -160,6 +160,18 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',  # Limit anonymous users to 100 requests per day
+        'user': '1000/day',  # Limit authenticated users to 1000 requests per day
+        'login': '5/minute',  # Limit login attempts to 5 per minute
+        'register': '10/day',  # Limit registration attempts to 10 per day
+        'reservation_create': '20/day',  # Limit reservation creation to 20 per day
+        'reservation_list': '100/day',  # Limit reservation listing to 100 per day
+    },
 }
 
 # JWT settings

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.common.throttling import ReservationCreateRateThrottle, ReservationListRateThrottle
 
 from .models import Reservation, ReservationService, ReservationStatus
 from .serializers import (
@@ -26,6 +27,16 @@ class ReservationViewSet(viewsets.ModelViewSet):
     search_fields = ['special_requests', 'user__email', 'user__first_name', 'user__last_name']
     ordering_fields = ['created_at', 'check_in_date', 'check_out_date', 'total_price']
     ordering = ['-created_at']
+    
+    def get_throttles(self):
+        """Return appropriate throttle classes based on action."""
+        if self.action == 'create':
+            throttle_classes = [ReservationCreateRateThrottle]
+        elif self.action == 'list':
+            throttle_classes = [ReservationListRateThrottle]
+        else:
+            throttle_classes = []
+        return [throttle() for throttle in throttle_classes]
     
     def get_queryset(self):
         user = self.request.user
@@ -139,6 +150,7 @@ class UserReservationViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['special_requests']
     ordering_fields = ['created_at', 'check_in_date', 'check_out_date', 'total_price']
     ordering = ['-created_at']
+    throttle_classes = [ReservationListRateThrottle]
     
     def get_queryset(self):
         # The user_pk will be provided by the nested router

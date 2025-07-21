@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.db.models import Avg
-from .models import Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview
+from .models import Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview, ApartmentAvailability
 from apps.services.serializers import ServiceListSerializer
+from datetime import date, timedelta
 
 
 class ApartmentCategorySerializer(serializers.ModelSerializer):
@@ -130,6 +131,97 @@ class ApartmentReviewCreateSerializer(serializers.ModelSerializer):
         fields = ['apartment', 'rating', 'comment']
     
     def create(self, validated_data):
-        # Set the user from the request context
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class ApartmentAvailabilitySerializer(serializers.ModelSerializer):
+    apartment_name = serializers.ReadOnlyField(source='apartment.name')
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    effective_price = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ApartmentAvailability
+        fields = ['id', 'apartment', 'apartment_name', 'date', 'status', 'status_display', 
+                  'price_override', 'effective_price', 'notes', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_effective_price(self, obj):
+        """Return the price_override if set, otherwise the apartment's default price."""
+        return obj.price_override if obj.price_override else obj.apartment.price_per_night
+
+
+class ApartmentAvailabilityCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApartmentAvailability
+        fields = ['apartment', 'date', 'status', 'price_override', 'notes']
+    
+    def validate(self, data):
+        # Check if the date is not in the past
+        if data.get('date') and data['date'] < date.today():
+            raise serializers.ValidationError({'date': 'Cannot set availability for past dates'})
+        return data
+
+
+class ApartmentAvailabilityBulkCreateSerializer(serializers.Serializer):
+    apartment = serializers.PrimaryKeyRelatedField(queryset=Apartment.objects.all())
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    status = serializers.ChoiceField(choices=ApartmentAvailability.STATUS_CHOICES)
+    price_override = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, data):
+        # Check if end_date is after start_date
+        if data['end_date'] < data['start_date']:
+            raise serializers.ValidationError({'end_date': 'End date must be after start date'})
+        
+        # Check if the date range is not in the past
+        if data['start_date'] < date.today():
+            raise serializers.ValidationError({'start_date': 'Cannot set availability for past dates'})
+        
+        # Limit the range to a reasonable number (e.g., 365 days)
+        if (data['end_date'] - data['start_date']).days > 365:
+            raise serializers.ValidationError({'end_date': 'Date range cannot exceed 365 days'})
+        
+        return data
+    
+    def create(self, validated_data):
+        apartment = validated_data['apartment']
+        start_date = validated_data['start_date']
+        end_date = validated_data['end_date']
+        status = validated_data['status']
+        price_override = validated_data.get('price_override')
+        notes = validated_data.get('notes', '')
+        
+        # Create availability entries for each date in the range
+        availabilities = []
+        current_date = start_date
+        while current_date <= end_date:
+            # Check if an entry already exists for this date
+            existing = ApartmentAvailability.objects.filter(
+                apartment=apartment,
+                date=current_date
+            ).first()
+            
+            if existing:
+                # Update existing entry
+                existing.status = status
+                existing.price_override = price_override
+                existing.notes = notes
+                existing.save()
+                availabilities.append(existing)
+            else:
+                # Create new entry
+                availability = ApartmentAvailability.objects.create(
+                    apartment=apartment,
+                    date=current_date,
+                    status=status,
+                    price_override=price_override,
+                    notes=notes
+                )
+                availabilities.append(availability)
+            
+            current_date += timedelta(days=1)
+        
+        return availabilities
