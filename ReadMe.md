@@ -16,6 +16,28 @@ Create an application for renting **high-end luxury apartments**, each with rich
 
 ---
 
+## 🔄 Recent Backend Enhancements
+
+### 🔐 Authentication & User Management
+* JWT-based authentication with token refresh
+* Email verification for new user registrations
+* Password reset functionality with email notifications
+* Custom HTML email templates for better user experience
+
+### 🔍 API Improvements
+* Nested routes for related resources (e.g., user reservations)
+* Advanced filtering for apartments (location, price range, amenities)
+* Pagination for listing endpoints with customizable page sizes
+* Permission-based access control for all endpoints
+
+### 📊 Data Organization
+* Structured service types and services
+* Apartment-service relationships for included amenities
+* User profile management
+* Reservation tracking and history
+
+---
+
 ## 🧱 Core Features
 
 ### 🏠 Home (Apartments Listing)
@@ -142,12 +164,14 @@ Create an application for renting **high-end luxury apartments**, each with rich
 
 ## 🔌 Technologies
 
-| Layer         | Stack                                 |
-| ------------- | ------------------------------------- |
-| Mobile        | Flutter                               |
-| Web           | React.js                              |
-| Backend       | Django + Django REST Framework        |
-| Database      | MySQL                                 |
+| Layer         | Stack                                                 |
+| ------------- | ----------------------------------------------------- |
+| Mobile        | Flutter                                               |
+| Web           | React.js                                              |
+| Backend       | Django + Django REST Framework                        |
+| Database      | MySQL                                                 |
+| Authentication| JWT (djangorestframework-simplejwt) + Djoser          |
+| API Features  | Nested Routers, Filtering, Pagination, Email Verification |
 | Communication | WhatsApp API (manual message trigger) |
 
 ---

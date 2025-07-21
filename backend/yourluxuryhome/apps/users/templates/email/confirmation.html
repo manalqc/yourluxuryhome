@@ -1,0 +1,80 @@
+{% load i18n %}
+
+{% block subject %}
+{% blocktrans %}Account Activated on {{ site_name }}{% endblocktrans %}
+{% endblock subject %}
+
+{% block text_body %}
+{% blocktrans %}Your account has been successfully activated on {{ site_name }}.{% endblocktrans %}
+
+{% trans "You can now log in using your credentials." %}
+
+{% trans "Thanks for using our site!" %}
+
+{% blocktrans %}The {{ site_name }} team{% endblocktrans %}
+{% endblock text_body %}
+
+{% block html_body %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Account Activated</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #1a365d;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4a90e2;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{% trans "Account Activated" %}</h1>
+    </div>
+    <div class="content">
+        <p>{% blocktrans %}Your account has been successfully activated on {{ site_name }}.{% endblocktrans %}</p>
+        <p>{% trans "You can now log in using your credentials." %}</p>
+        <p style="text-align: center;">
+            <a class="button" href="{{ protocol }}://{{ domain }}">{% trans "Go to Login" %}</a>
+        </p>
+        <p>{% trans "Thanks for using our site!" %}</p>
+    </div>
+    <div class="footer">
+        <p>{% blocktrans %}The {{ site_name }} team{% endblocktrans %}</p>
+    </div>
+</body>
+</html>
+{% endblock html_body %}
