@@ -10,6 +10,8 @@ from .views import (
 )
 from .views_availability import ApartmentAvailabilityViewSet
 
+app_name = 'apartments'
+
 router = DefaultRouter()
 router.register(r'categories', ApartmentCategoryViewSet, basename='apartment-category')
 router.register(r'amenities', ApartmentAmenityViewSet, basename='apartment-amenity')

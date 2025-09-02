@@ -29,7 +29,7 @@ class UserProfileSignalTests(TestCase):
         # Check that the profile fields are initialized correctly
         self.assertIsNone(user.profile.bio)
         self.assertIsNone(user.profile.phone_number)
-        self.assertIsNone(user.profile.photo)
+        self.assertFalse(user.profile.photo)
         
     def test_profile_updated_on_user_update(self):
         """Test that a profile is updated when a user is updated."""

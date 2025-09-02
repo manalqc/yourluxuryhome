@@ -176,3 +176,12 @@ class PasswordResetConfirmView(APIView):
                 return Response({"error": "Invalid reset link"}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    A viewset for viewing user instances.
+    """
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]

@@ -125,10 +125,26 @@ class ApartmentImageCreateSerializer(serializers.ModelSerializer):
         fields = ['apartment', 'image', 'caption', 'is_primary']
 
 
+class ApartmentReviewUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApartmentReview
+        fields = ['rating', 'comment']
+
+
 class ApartmentReviewCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApartmentReview
         fields = ['apartment', 'rating', 'comment']
+
+    def validate(self, data):
+        """
+        Check that the user has not already reviewed this apartment.
+        """
+        user = self.context['request'].user
+        apartment = data.get('apartment')
+        if apartment and user and ApartmentReview.objects.filter(apartment=apartment, user=user).exists():
+            raise serializers.ValidationError({'detail': 'You have already reviewed this apartment.'})
+        return data
     
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user

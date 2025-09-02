@@ -19,7 +19,8 @@ from .serializers import (
     ApartmentImageSerializer,
     ApartmentImageCreateSerializer,
     ApartmentReviewSerializer,
-    ApartmentReviewCreateSerializer
+    ApartmentReviewCreateSerializer,
+    ApartmentReviewUpdateSerializer
 )
 
 
@@ -186,8 +187,10 @@ class ApartmentReviewViewSet(viewsets.ModelViewSet):
         return ApartmentReview.objects.all()
     
     def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action == 'create':
             return ApartmentReviewCreateSerializer
+        if self.action in ['update', 'partial_update']:
+            return ApartmentReviewUpdateSerializer
         return ApartmentReviewSerializer
     
     def perform_create(self, serializer):
