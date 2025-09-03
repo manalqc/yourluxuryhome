@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview
+from .models import Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview, VirtualTourRoom
 from .serializers import (
     ApartmentListSerializer,
     ApartmentDetailSerializer,
@@ -20,7 +20,9 @@ from .serializers import (
     ApartmentImageCreateSerializer,
     ApartmentReviewSerializer,
     ApartmentReviewCreateSerializer,
-    ApartmentReviewUpdateSerializer
+    ApartmentReviewUpdateSerializer,
+    VirtualTourSerializer,
+    VirtualTourRoomSerializer
 )
 
 
@@ -39,7 +41,7 @@ class ApartmentCategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing ApartmentCategory instances."""
     queryset = ApartmentCategory.objects.all()
     serializer_class = ApartmentCategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
@@ -48,14 +50,14 @@ class ApartmentAmenityViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing ApartmentAmenity instances."""
     queryset = ApartmentAmenity.objects.all()
     serializer_class = ApartmentAmenitySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
 
 class ApartmentViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing Apartment instances."""
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['city', 'country', 'bedrooms', 'bathrooms', 'max_guests', 'category', 'is_available']
     search_fields = ['name', 'description', 'address', 'city', 'country']
@@ -144,12 +146,43 @@ class ApartmentViewSet(viewsets.ModelViewSet):
         serializer = ReservationSerializer(reservations, many=True)
         
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    def virtual_tour(self, request, slug=None):
+        """Get virtual tour data for this apartment including all 360° rooms and connections."""
+        apartment = self.get_object()
+        
+        # Get all virtual tour rooms for this apartment
+        rooms = VirtualTourRoom.objects.filter(apartment=apartment).order_by('order', 'created_at')
+        
+        if not rooms.exists():
+            return Response(
+                {"detail": "No virtual tour available for this apartment."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get the starting room (default to first room if none is marked as starting)
+        starting_room = rooms.filter(is_starting_room=True).first()
+        if not starting_room:
+            starting_room = rooms.first()
+        
+        # Prepare the response data
+        tour_data = {
+            'apartment_id': apartment.id,
+            'apartment_name': apartment.name,
+            'rooms': VirtualTourRoomSerializer(rooms, many=True, context={'request': request}).data,
+            'starting_room': VirtualTourRoomSerializer(starting_room, context={'request': request}).data if starting_room else None,
+            'room_count': rooms.count()
+        }
+        
+        serializer = VirtualTourSerializer(tour_data)
+        return Response(serializer.data)
 
 
 class ApartmentImageViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing ApartmentImage instances."""
     serializer_class = ApartmentImageSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         return ApartmentImage.objects.all()

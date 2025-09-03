@@ -33,7 +33,7 @@ class ServiceTypeViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing ServiceType instances."""
     queryset = ServiceType.objects.all()
     serializer_class = ServiceTypeSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['order', 'name']
@@ -62,7 +62,7 @@ class ServiceTypeViewSet(viewsets.ModelViewSet):
 
 class ServiceViewSet(viewsets.ModelViewSet):
     """ViewSet for viewing and editing Service instances."""
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['type', 'is_active', 'is_featured']
     search_fields = ['name', 'description']

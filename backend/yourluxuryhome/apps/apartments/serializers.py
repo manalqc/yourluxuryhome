@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.db.models import Avg
-from .models import Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview, ApartmentAvailability
+from .models import (
+    Apartment, ApartmentCategory, ApartmentAmenity, ApartmentImage, ApartmentReview, ApartmentAvailability,
+    VirtualTourRoom, RoomConnection, VirtualTourHotspot
+)
 from apps.services.serializers import ServiceListSerializer
 from datetime import date, timedelta
 
@@ -241,3 +244,92 @@ class ApartmentAvailabilityBulkCreateSerializer(serializers.Serializer):
             current_date += timedelta(days=1)
         
         return availabilities
+
+
+class VirtualTourHotspotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VirtualTourHotspot
+        fields = [
+            'id', 'hotspot_type', 'position_x', 'position_y', 
+            'title', 'description', 'icon', 'connected_room', 'is_active'
+        ]
+
+
+class RoomConnectionSerializer(serializers.ModelSerializer):
+    to_room_name = serializers.ReadOnlyField(source='to_room.name')
+    to_room_type = serializers.ReadOnlyField(source='to_room.room_type')
+    
+    class Meta:
+        model = RoomConnection
+        fields = [
+            'id', 'to_room', 'to_room_name', 'to_room_type',
+            'hotspot_x', 'hotspot_y', 'direction_label',
+            'transition_yaw', 'transition_pitch'
+        ]
+
+
+class VirtualTourRoomSerializer(serializers.ModelSerializer):
+    connections_from = RoomConnectionSerializer(many=True, read_only=True)
+    hotspots = VirtualTourHotspotSerializer(many=True, read_only=True)
+    panoramic_image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = VirtualTourRoom
+        fields = [
+            'id', 'name', 'room_type', 'panoramic_image', 'panoramic_image_url',
+            'description', 'order', 'is_starting_room', 'initial_yaw', 'initial_pitch',
+            'connections_from', 'hotspots'
+        ]
+    
+    def get_panoramic_image_url(self, obj):
+        if obj.panoramic_image and hasattr(obj.panoramic_image, 'url'):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.panoramic_image.url)
+            return obj.panoramic_image.url
+        return None
+
+
+class VirtualTourSerializer(serializers.Serializer):
+    apartment_id = serializers.UUIDField(read_only=True)
+    apartment_name = serializers.CharField(read_only=True)
+    rooms = VirtualTourRoomSerializer(many=True, read_only=True)
+    starting_room = VirtualTourRoomSerializer(read_only=True)
+    room_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        fields = ['apartment_id', 'apartment_name', 'rooms', 'starting_room', 'room_count']
+
+
+class VirtualTourRoomCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VirtualTourRoom
+        fields = [
+            'apartment', 'name', 'room_type', 'panoramic_image',
+            'description', 'order', 'is_starting_room', 'initial_yaw', 'initial_pitch'
+        ]
+
+
+class RoomConnectionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomConnection
+        fields = [
+            'from_room', 'to_room', 'hotspot_x', 'hotspot_y',
+            'direction_label', 'transition_yaw', 'transition_pitch'
+        ]
+    
+    def validate(self, data):
+        if data['from_room'].apartment != data['to_room'].apartment:
+            raise serializers.ValidationError({'detail': 'Rooms must belong to the same apartment'})
+        if data['from_room'] == data['to_room']:
+            raise serializers.ValidationError({'detail': 'Room cannot connect to itself'})
+        return data
+
+
+class VirtualTourHotspotCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VirtualTourHotspot
+        fields = [
+            'room', 'hotspot_type', 'position_x', 'position_y',
+            'title', 'description', 'icon', 'connected_room', 'is_active'
+        ]

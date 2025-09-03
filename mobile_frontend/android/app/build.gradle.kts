@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.mobile_frontend"
     compileSdk = flutter.compileSdkVersion
-    // ndkVersion removed - let Android Gradle Plugin handle it automatically
+    ndkVersion = "27.0.12077973" // Working NDK version with complete installation
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

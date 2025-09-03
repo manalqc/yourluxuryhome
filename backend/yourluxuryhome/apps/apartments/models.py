@@ -3,9 +3,38 @@ from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
+from django.core.files.images import get_image_dimensions
 import uuid
 from datetime import date
 from apps.services.models import Service
+
+
+def validate_panoramic_image(image):
+    """Validate that uploaded image is suitable for 360° panoramic display."""
+    try:
+        width, height = get_image_dimensions(image)
+        if width and height:
+            aspect_ratio = width / height
+            # Check if image has roughly 2:1 aspect ratio (equirectangular)
+            if not (1.8 <= aspect_ratio <= 2.2):
+                raise ValidationError(
+                    _('Panoramic image should have 2:1 aspect ratio (e.g., 4096x2048). '
+                      f'Current aspect ratio: {aspect_ratio:.2f}:1')
+                )
+            # Check minimum resolution
+            if width < 2048 or height < 1024:
+                raise ValidationError(
+                    _('Panoramic image should be at least 2048x1024 pixels. '
+                      f'Current size: {width}x{height}')
+                )
+            # Check maximum file size (10MB)
+            if image.size > 10 * 1024 * 1024:
+                raise ValidationError(
+                    _('Panoramic image file size should not exceed 10MB. '
+                      f'Current size: {image.size / (1024*1024):.1f}MB')
+                )
+    except Exception as e:
+        raise ValidationError(_('Unable to validate image: %s') % str(e))
 
 
 class ApartmentCategory(models.Model):
@@ -159,3 +188,136 @@ class ApartmentAvailability(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class VirtualTourRoom(models.Model):
+    """Model to store 360° panoramic rooms for virtual tours."""
+    
+    ROOM_TYPES = (
+        ('living_room', _('Living Room')),
+        ('bedroom', _('Bedroom')),
+        ('kitchen', _('Kitchen')),
+        ('bathroom', _('Bathroom')),
+        ('dining_room', _('Dining Room')),
+        ('balcony', _('Balcony')),
+        ('terrace', _('Terrace')),
+        ('office', _('Office')),
+        ('hallway', _('Hallway')),
+        ('entrance', _('Entrance')),
+        ('other', _('Other')),
+    )
+    
+    apartment = models.ForeignKey(Apartment, on_delete=models.CASCADE, related_name='virtual_tour_rooms')
+    name = models.CharField(max_length=100)
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPES)
+    panoramic_image = models.ImageField(
+        upload_to='virtual_tour/panoramas/',
+        validators=[validate_panoramic_image],
+        help_text=_('Upload equirectangular panoramic image (2:1 aspect ratio, min 2048x1024, max 10MB)')
+    )
+    description = models.TextField(blank=True, null=True)
+    order = models.PositiveSmallIntegerField(default=0, help_text=_('Display order in virtual tour'))
+    is_starting_room = models.BooleanField(default=False, help_text=_('Is this the starting room for the virtual tour?'))
+    
+    # Position data for 360° navigation
+    initial_yaw = models.FloatField(default=0.0, help_text=_('Initial horizontal viewing angle in degrees'))
+    initial_pitch = models.FloatField(default=0.0, help_text=_('Initial vertical viewing angle in degrees'))
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = _('Virtual Tour Room')
+        verbose_name_plural = _('Virtual Tour Rooms')
+    
+    def __str__(self):
+        return f"{self.apartment.name} - {self.name}"
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one starting room per apartment
+        if self.is_starting_room:
+            VirtualTourRoom.objects.filter(
+                apartment=self.apartment, 
+                is_starting_room=True
+            ).exclude(pk=self.pk).update(is_starting_room=False)
+        super().save(*args, **kwargs)
+
+
+class RoomConnection(models.Model):
+    """Model to define connections between virtual tour rooms."""
+    
+    from_room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, related_name='connections_from')
+    to_room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, related_name='connections_to')
+    
+    # Hotspot position in the panoramic image (normalized coordinates 0-1)
+    hotspot_x = models.FloatField(help_text=_('X position of hotspot (0.0 to 1.0)'))
+    hotspot_y = models.FloatField(help_text=_('Y position of hotspot (0.0 to 1.0)'))
+    
+    # Direction label for UI
+    direction_label = models.CharField(max_length=50, blank=True, null=True, 
+                                     help_text=_('Label for the connection (e.g., "To Kitchen", "Exit to Balcony")'))
+    
+    # Transition settings
+    transition_yaw = models.FloatField(default=0.0, help_text=_('Target viewing angle after transition'))
+    transition_pitch = models.FloatField(default=0.0, help_text=_('Target pitch angle after transition'))
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _('Room Connection')
+        verbose_name_plural = _('Room Connections')
+        unique_together = ('from_room', 'to_room')
+    
+    def __str__(self):
+        return f"{self.from_room.name} → {self.to_room.name}"
+    
+    def clean(self):
+        """Validate that rooms belong to the same apartment and prevent self-connections."""
+        if self.from_room.apartment != self.to_room.apartment:
+            raise ValidationError(_('Rooms must belong to the same apartment'))
+        if self.from_room == self.to_room:
+            raise ValidationError(_('Room cannot connect to itself'))
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class VirtualTourHotspot(models.Model):
+    """Model for interactive hotspots within virtual tour rooms."""
+    
+    HOTSPOT_TYPES = (
+        ('navigation', _('Navigation')),
+        ('info', _('Information')),
+        ('feature', _('Feature Highlight')),
+        ('amenity', _('Amenity')),
+    )
+    
+    room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, related_name='hotspots')
+    hotspot_type = models.CharField(max_length=20, choices=HOTSPOT_TYPES, default='info')
+    
+    # Position in panoramic image (normalized coordinates)
+    position_x = models.FloatField(help_text=_('X position (0.0 to 1.0)'))
+    position_y = models.FloatField(help_text=_('Y position (0.0 to 1.0)'))
+    
+    # Content
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    icon = models.CharField(max_length=50, blank=True, null=True, help_text=_('Icon name for frontend display'))
+    
+    # Navigation (if this is a navigation hotspot)
+    connected_room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, 
+                                     related_name='incoming_hotspots', blank=True, null=True)
+    
+    # Display settings
+    is_active = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _('Virtual Tour Hotspot')
+        verbose_name_plural = _('Virtual Tour Hotspots')
+    
+    def __str__(self):
+        return f"{self.room.name} - {self.title}"

@@ -57,7 +57,7 @@ class ReservationCreateSerializer(ReservationSerializer):
     
     class Meta(ReservationSerializer.Meta):
         fields = ReservationSerializer.Meta.fields
-        read_only_fields = ['id', 'total_price', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'total_price', 'created_at', 'updated_at']
     
     def create(self, validated_data):
         services_data = validated_data.pop('services', [])

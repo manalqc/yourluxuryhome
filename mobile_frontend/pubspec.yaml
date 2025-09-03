@@ -47,7 +47,17 @@ dependencies:
   google_fonts: ^6.2.1
   shimmer: ^3.0.0
   cached_network_image: ^3.3.1
+  
+  # 3D Model Viewer
+  model_viewer_plus: ^1.7.2
   flutter_svg: ^2.0.10+1
+  
+  # 360-degree panoramic viewer
+  panorama: ^0.4.1
+  
+  # 3D Virtual Tour packages
+  vector_math: ^2.1.4
+  webview_flutter: ^4.4.4
   
   # Animations and transitions
   animations: ^2.0.11
@@ -88,6 +98,9 @@ flutter:
     - assets/images/
     - assets/fonts/
     - assets/translations/
+    - assets/models/
+    - assets/panorama/
+    - web/virtual_tour.html
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

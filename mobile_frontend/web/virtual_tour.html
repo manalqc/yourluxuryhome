@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Tour - Your Luxury Home</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .ui-overlay {
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .top-bar {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .room-info {
+            background: rgba(0, 0, 0, 0.8);
+            color: #FFD700;
+            padding: 15px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+        }
+        
+        .room-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .apartment-name {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .bottom-controls {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .navigation-dots {
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+        }
+        
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .nav-dot.active {
+            background: #FFD700;
+            transform: scale(1.2);
+        }
+        
+        .nav-dot:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(1.1);
+        }
+        
+        .nav-dot::after {
+            content: attr(data-room);
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        
+        .nav-dot:hover::after {
+            opacity: 1;
+        }
+        
+        .movement-controls {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .move-btn {
+            width: 50px;
+            height: 50px;
+            border: 2px solid rgba(255, 215, 0, 0.6);
+            background: rgba(255, 215, 0, 0.1);
+            color: #FFD700;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .move-btn:hover {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: #FFD700;
+            transform: scale(1.1);
+        }
+        
+        .move-btn:active {
+            background: rgba(255, 215, 0, 0.3);
+        }
+        
+        .hotspot {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 215, 0, 0.8);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            animation: pulse 2s infinite;
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+        
+        .hotspot:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 215, 0, 0.6); }
+            50% { transform: scale(1.1); box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 215, 0, 0.6); }
+        }
+        
+        .mini-map {
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .mini-map-title {
+            color: #FFD700;
+            font-size: 12px;
+            padding: 5px 10px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+        }
+        
+        .mini-map-content {
+            padding: 10px;
+            color: white;
+            font-size: 10px;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            color: white;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 215, 0, 0.3);
+            border-top: 4px solid #FFD700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            color: #FFD700;
+        }
+        
+        @keyframes popupFadeIn {
+            0% { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            100% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading Virtual Tour...</div>
+        </div>
+        
+        <!-- UI Overlays -->
+        <div class="ui-overlay top-bar">
+            <div class="room-info">
+                <div class="room-name" id="room-name">Living Room</div>
+                <div class="apartment-name" id="apartment-name">Luxury Penthouse</div>
+            </div>
+            <button class="close-btn" onclick="closeTour()" title="Close Tour">×</button>
+        </div>
+        
+        <div class="ui-overlay mini-map">
+            <div class="mini-map-title">Room Map</div>
+            <div class="mini-map-content" id="mini-map-content">
+                <div>• Living Room</div>
+                <div>• Kitchen</div>
+                <div>• Bedroom</div>
+            </div>
+        </div>
+        
+        <div class="ui-overlay bottom-controls">
+            <div class="navigation-dots" id="navigation-dots">
+                <!-- Dots will be generated dynamically -->
+            </div>
+            
+            <div class="movement-controls">
+                <button class="move-btn" onclick="moveCamera('forward')" title="Move Forward">↑</button>
+                <button class="move-btn" onclick="moveCamera('backward')" title="Move Backward">↓</button>
+                <button class="move-btn" onclick="resetView()" title="Reset View">🏠</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let scene, camera, renderer, controls;
+        let currentRoom = 0;
+        let rooms = [];
+        let isTransitioning = false;
+        let apartmentData = null;
+        
+        // Initialize the virtual tour
+        function initVirtualTour() {
+            // Get data from Flutter or URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const apartmentId = urlParams.get('apartmentId');
+            const apiBase = urlParams.get('apiBase') || 'http://localhost:8000';
+            
+            if (apartmentId) {
+                loadTourData(apiBase, apartmentId);
+            } else {
+                // Use demo data for testing
+                loadDemoData();
+            }
+        }
+        
+        // Load tour data from API
+        async function loadTourData(apiBase, apartmentId) {
+            try {
+                const response = await fetch(`${apiBase}/api/v1/apartments/${apartmentId}/virtual_tour/`);
+                const data = await response.json();
+                apartmentData = data;
+                rooms = data.rooms || [];
+                
+                if (rooms.length > 0) {
+                    init3DScene();
+                    loadRoom(0);
+                    generateNavigationDots();
+                    updateMiniMap();
+                } else {
+                    showError('No virtual tour data available');
+                }
+            } catch (error) {
+                console.error('Failed to load tour data:', error);
+                loadDemoData();
+            }
+        }
+        
+        // Load demo data for testing
+        function loadDemoData() {
+            apartmentData = {
+                apartment_id: 'demo',
+                apartment_name: 'Luxury Penthouse Suite',
+                rooms: [
+                    {
+                        id: 1,
+                        name: 'Living Room',
+                        room_type: 'living_room',
+                        panoramic_image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=2048&h=1024&fit=crop',
+                        initial_yaw: 0,
+                        initial_pitch: 0,
+                        hotspots: [
+                            {
+                                id: 'to_kitchen',
+                                type: 'navigation',
+                                screen_x: 75,
+                                screen_y: 45,
+                                target_room_id: 2,
+                                icon: '🍽️',
+                                tooltip: 'Go to Kitchen'
+                            },
+                            {
+                                id: 'to_bedroom',
+                                type: 'navigation', 
+                                screen_x: 25,
+                                screen_y: 40,
+                                target_room_id: 3,
+                                icon: '🛏️',
+                                tooltip: 'Go to Bedroom'
+                            },
+                            {
+                                id: 'sofa_info',
+                                type: 'info',
+                                screen_x: 50,
+                                screen_y: 65,
+                                icon: '💺',
+                                tooltip: 'Premium Sofa Collection',
+                                description: 'Italian leather sofa set with premium comfort and modern design.'
+                            }
+                        ]
+                    },
+                    {
+                        id: 2,
+                        name: 'Kitchen',
+                        room_type: 'kitchen',
+                        panoramic_image: 'https://images.unsplash.com/photo-1556912173-3bb406ef7e77?w=2048&h=1024&fit=crop',
+                        initial_yaw: 90,
+                        initial_pitch: 0,
+                        hotspots: [
+                            {
+                                id: 'to_living',
+                                type: 'navigation',
+                                screen_x: 20,
+                                screen_y: 50,
+                                target_room_id: 1,
+                                icon: '🏠',
+                                tooltip: 'Return to Living Room'
+                            },
+                            {
+                                id: 'appliances',
+                                type: 'feature',
+                                screen_x: 60,
+                                screen_y: 55,
+                                icon: '🔥',
+                                tooltip: 'Premium Kitchen Appliances',
+                                description: 'State-of-the-art kitchen with professional-grade appliances and granite countertops.'
+                            }
+                        ]
+                    },
+                    {
+                        id: 3,
+                        name: 'Master Bedroom',
+                        room_type: 'bedroom',
+                        panoramic_image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=2048&h=1024&fit=crop',
+                        initial_yaw: 180,
+                        initial_pitch: 0,
+                        hotspots: [
+                            {
+                                id: 'to_living',
+                                type: 'navigation',
+                                screen_x: 80,
+                                screen_y: 50,
+                                target_room_id: 1,
+                                icon: '🏠',
+                                tooltip: 'Return to Living Room'
+                            },
+                            {
+                                id: 'bed_feature',
+                                type: 'feature',
+                                screen_x: 50,
+                                screen_y: 75,
+                                icon: '👑',
+                                tooltip: 'Luxury King Bed',
+                                description: 'Premium king-size bed with memory foam mattress and luxury linens.'
+                            }
+                        ]
+                    }
+                ]
+            };
+            rooms = apartmentData.rooms;
+            
+            init3DScene();
+            loadRoom(0);
+            generateNavigationDots();
+            updateMiniMap();
+        }
+        
+        // Initialize Three.js scene
+        function init3DScene() {
+            // Scene setup
+            scene = new THREE.Scene();
+            
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 0);
+            
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Controls setup
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableZoom = true;
+            controls.enablePan = false;
+            controls.minDistance = 0.1;
+            controls.maxDistance = 100;
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.rotateSpeed = -0.5;
+            
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Start render loop
+            animate();
+        }
+        
+        // Load a specific room
+        function loadRoom(roomIndex) {
+            if (roomIndex < 0 || roomIndex >= rooms.length) return;
+            
+            currentRoom = roomIndex;
+            const room = rooms[roomIndex];
+            
+            // Update UI
+            document.getElementById('room-name').textContent = room.name;
+            document.getElementById('apartment-name').textContent = apartmentData.apartment_name || 'Luxury Apartment';
+            
+            // Show loading
+            showLoading(`Loading ${room.name}...`);
+            
+            // Load panoramic image
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+                room.panoramic_image,
+                function(texture) {
+                    // Create sphere geometry for 360° panorama
+                    const geometry = new THREE.SphereGeometry(500, 60, 40);
+                    geometry.scale(-1, 1, 1); // Invert geometry for inside view
+                    
+                    // Create material with the panoramic texture
+                    const material = new THREE.MeshBasicMaterial({ map: texture });
+                    
+                    // Remove existing panorama if any
+                    const existingPanorama = scene.getObjectByName('panorama');
+                    if (existingPanorama) {
+                        scene.remove(existingPanorama);
+                    }
+                    
+                    // Create and add new panorama
+                    const panorama = new THREE.Mesh(geometry, material);
+                    panorama.name = 'panorama';
+                    scene.add(panorama);
+                    
+                    // Set initial camera position
+                    controls.reset();
+                    camera.rotation.y = THREE.MathUtils.degToRad(room.initial_yaw || 0);
+                    camera.rotation.x = THREE.MathUtils.degToRad(room.initial_pitch || 0);
+                    
+                    // Update navigation
+                    updateNavigationDots();
+                    updateHotspots(room.hotspots || []);
+                    
+                    // Hide loading
+                    hideLoading();
+                },
+                function(progress) {
+                    // Loading progress
+                    const percent = Math.round((progress.loaded / progress.total) * 100);
+                    updateLoading(`Loading ${room.name}... ${percent}%`);
+                },
+                function(error) {
+                    console.error('Error loading panoramic image:', error);
+                    showError(`Failed to load ${room.name}`);
+                }
+            );
+        }
+        
+        // Generate navigation dots
+        function generateNavigationDots() {
+            const dotsContainer = document.getElementById('navigation-dots');
+            dotsContainer.innerHTML = '';
+            
+            rooms.forEach((room, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'nav-dot';
+                dot.setAttribute('data-room', room.name);
+                dot.onclick = () => switchRoom(index);
+                dotsContainer.appendChild(dot);
+            });
+        }
+        
+        // Update navigation dots
+        function updateNavigationDots() {
+            const dots = document.querySelectorAll('.nav-dot');
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentRoom);
+            });
+        }
+        
+        // Switch to a specific room
+        function switchRoom(roomIndex) {
+            if (isTransitioning || roomIndex === currentRoom) return;
+            
+            isTransitioning = true;
+            
+            // Fade effect during transition
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                background: rgba(0,0,0,0.8); z-index: 1500; 
+                transition: opacity 0.5s ease;
+            `;
+            document.body.appendChild(overlay);
+            
+            setTimeout(() => {
+                loadRoom(roomIndex);
+                setTimeout(() => {
+                    overlay.remove();
+                    isTransitioning = false;
+                }, 500);
+            }, 250);
+        }
+        
+        // Update hotspots
+        function updateHotspots(hotspots) {
+            // Remove existing hotspots
+            document.querySelectorAll('.hotspot').forEach(hotspot => hotspot.remove());
+            
+            // Add new hotspots
+            hotspots.forEach(hotspot => {
+                const hotspotEl = document.createElement('div');
+                hotspotEl.className = 'hotspot';
+                hotspotEl.innerHTML = hotspot.icon || '🚪';
+                hotspotEl.style.left = `${hotspot.screen_x}%`;
+                hotspotEl.style.top = `${hotspot.screen_y}%`;
+                hotspotEl.onclick = () => handleHotspotClick(hotspot);
+                hotspotEl.title = hotspot.tooltip || 'Navigate';
+                document.getElementById('container').appendChild(hotspotEl);
+            });
+        }
+        
+        // Handle hotspot clicks
+        function handleHotspotClick(hotspot) {
+            if (hotspot.type === 'navigation' && hotspot.target_room_id) {
+                const roomIndex = rooms.findIndex(room => room.id === hotspot.target_room_id);
+                if (roomIndex !== -1) {
+                    switchRoom(roomIndex);
+                }
+            } else if (hotspot.type === 'info' || hotspot.type === 'feature') {
+                showHotspotInfo(hotspot);
+            }
+        }
+        
+        // Show hotspot information popup
+        function showHotspotInfo(hotspot) {
+            // Create info popup
+            const popup = document.createElement('div');
+            popup.className = 'hotspot-info-popup';
+            popup.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 30px;
+                border-radius: 15px;
+                border: 2px solid #FFD700;
+                max-width: 400px;
+                z-index: 3000;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+                animation: popupFadeIn 0.3s ease-out;
+            `;
+            
+            popup.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="font-size: 40px; margin-bottom: 15px;">${hotspot.icon || '📍'}</div>
+                    <h3 style="color: #FFD700; font-size: 24px; margin: 0 0 15px 0;">${hotspot.tooltip}</h3>
+                    ${hotspot.description ? `<p style="font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">${hotspot.description}</p>` : ''}
+                    <button onclick="closeHotspotInfo()" style="
+                        background: #FFD700;
+                        color: black;
+                        border: none;
+                        padding: 12px 30px;
+                        border-radius: 25px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    " onmouseover="this.style.background='#FFA500'" onmouseout="this.style.background='#FFD700'">
+                        Got it!
+                    </button>
+                </div>
+            `;
+            
+            // Add popup to page
+            document.body.appendChild(popup);
+            
+            // Store reference for closing
+            window.currentPopup = popup;
+        }
+        
+        // Close hotspot info popup
+        function closeHotspotInfo() {
+            if (window.currentPopup) {
+                window.currentPopup.remove();
+                window.currentPopup = null;
+            }
+        }
+        
+        // Camera movement controls
+        function moveCamera(direction) {
+            const moveDistance = 10;
+            const currentRotation = controls.getAzimuthalAngle();
+            
+            switch (direction) {
+                case 'forward':
+                    controls.target.x += Math.sin(currentRotation) * moveDistance;
+                    controls.target.z += Math.cos(currentRotation) * moveDistance;
+                    break;
+                case 'backward':
+                    controls.target.x -= Math.sin(currentRotation) * moveDistance;
+                    controls.target.z -= Math.cos(currentRotation) * moveDistance;
+                    break;
+            }
+            
+            controls.update();
+        }
+        
+        // Reset camera view
+        function resetView() {
+            const room = rooms[currentRoom];
+            controls.reset();
+            camera.rotation.y = THREE.MathUtils.degToRad(room.initial_yaw || 0);
+            camera.rotation.x = THREE.MathUtils.degToRad(room.initial_pitch || 0);
+            controls.update();
+        }
+        
+        // Update mini-map
+        function updateMiniMap() {
+            const miniMapContent = document.getElementById('mini-map-content');
+            miniMapContent.innerHTML = '';
+            
+            // Add room progress indicator
+            const progressEl = document.createElement('div');
+            progressEl.style.cssText = `
+                text-align: center;
+                font-size: 10px;
+                color: #FFD700;
+                margin-bottom: 8px;
+                font-weight: bold;
+            `;
+            progressEl.innerHTML = `Room ${currentRoom + 1} of ${rooms.length}`;
+            miniMapContent.appendChild(progressEl);
+            
+            rooms.forEach((room, index) => {
+                const roomEl = document.createElement('div');
+                roomEl.style.cssText = `
+                    color: ${index === currentRoom ? '#FFD700' : '#fff'};
+                    font-size: ${index === currentRoom ? '11px' : '10px'};
+                    font-weight: ${index === currentRoom ? 'bold' : 'normal'};
+                    margin: 2px 0;
+                    cursor: pointer;
+                    padding: 2px 4px;
+                    border-radius: 4px;
+                    background: ${index === currentRoom ? 'rgba(255, 215, 0, 0.1)' : 'transparent'};
+                    transition: all 0.3s ease;
+                `;
+                roomEl.innerHTML = `${index === currentRoom ? '▶ ' : '   '}${room.name}`;
+                roomEl.onclick = () => switchRoom(index);
+                roomEl.onmouseover = () => {
+                    if (index !== currentRoom) {
+                        roomEl.style.background = 'rgba(255, 255, 255, 0.1)';
+                        roomEl.style.color = '#FFA500';
+                    }
+                };
+                roomEl.onmouseout = () => {
+                    if (index !== currentRoom) {
+                        roomEl.style.background = 'transparent';
+                        roomEl.style.color = '#fff';
+                    }
+                };
+                miniMapContent.appendChild(roomEl);
+            });
+        }
+        
+        // Loading functions
+        function showLoading(text = 'Loading...') {
+            const overlay = document.getElementById('loading-overlay');
+            const loadingText = document.querySelector('.loading-text');
+            loadingText.textContent = text;
+            overlay.style.display = 'flex';
+        }
+        
+        function updateLoading(text) {
+            const loadingText = document.querySelector('.loading-text');
+            loadingText.textContent = text;
+        }
+        
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.display = 'none';
+        }
+        
+        function showError(message) {
+            hideLoading();
+            alert(message);
+        }
+        
+        // Close tour
+        function closeTour() {
+            if (window.flutter_inappwebview) {
+                window.flutter_inappwebview.callHandler('closeTour');
+            } else {
+                window.close();
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', initVirtualTour);
+        
+        // Add keyboard controls
+        document.addEventListener('keydown', function(event) {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    if (currentRoom > 0) switchRoom(currentRoom - 1);
+                    break;
+                case 'ArrowRight':
+                    if (currentRoom < rooms.length - 1) switchRoom(currentRoom + 1);
+                    break;
+                case 'ArrowUp':
+                    moveCamera('forward');
+                    break;
+                case 'ArrowDown':
+                    moveCamera('backward');
+                    break;
+                case ' ':
+                    resetView();
+                    event.preventDefault();
+                    break;
+                case 'Escape':
+                    closeTour();
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>
