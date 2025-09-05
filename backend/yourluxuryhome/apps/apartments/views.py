@@ -166,16 +166,25 @@ class ApartmentViewSet(viewsets.ModelViewSet):
         if not starting_room:
             starting_room = rooms.first()
         
+        # Create a simple object to hold the data for VirtualTourSerializer
+        class TourData:
+            def __init__(self, apartment_id, apartment_name, rooms, starting_room, room_count):
+                self.apartment_id = apartment_id
+                self.apartment_name = apartment_name
+                self.rooms = rooms
+                self.starting_room = starting_room
+                self.room_count = room_count
+
         # Prepare the response data
-        tour_data = {
-            'apartment_id': apartment.id,
-            'apartment_name': apartment.name,
-            'rooms': VirtualTourRoomSerializer(rooms, many=True, context={'request': request}).data,
-            'starting_room': VirtualTourRoomSerializer(starting_room, context={'request': request}).data if starting_room else None,
-            'room_count': rooms.count()
-        }
+        tour_data = TourData(
+            apartment_id=apartment.id,
+            apartment_name=apartment.name,
+            rooms=rooms,
+            starting_room=starting_room,
+            room_count=rooms.count()
+        )
         
-        serializer = VirtualTourSerializer(tour_data)
+        serializer = VirtualTourSerializer(tour_data, context={'request': request})
         return Response(serializer.data)
 
 

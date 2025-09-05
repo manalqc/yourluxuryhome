@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Panoramic Tour</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        /* Loading Screen */
+        #loader {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+        
+        .loader-content {
+            text-align: center;
+        }
+        
+        .loader-spinner {
+            width: 80px;
+            height: 80px;
+            border: 3px solid #D4AF37;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loader-text {
+            color: #D4AF37;
+            font-size: 18px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        /* Room Info Overlay */
+        #room-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(26,26,26,0.9) 100%);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #D4AF37;
+            color: white;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            animation: slideInLeft 0.5s ease;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        #room-name {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #D4AF37;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        #room-description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #e0e0e0;
+        }
+        
+        /* Navigation Controls */
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(26,26,26,0.9) 100%);
+            padding: 15px 25px;
+            border-radius: 50px;
+            border: 1px solid #D4AF37;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            animation: slideInUp 0.5s ease;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateX(-50%) translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .control-btn {
+            background: linear-gradient(135deg, #D4AF37 0%, #B38B5D 100%);
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
+        }
+        
+        .control-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Floor Navigation Markers */
+        .navigation-marker {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+            z-index: 50;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+        
+        .marker-circle {
+            width: 100%;
+            height: 100%;
+            border: 3px solid #D4AF37;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.1) 100%);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .marker-circle:hover {
+            background: radial-gradient(circle, rgba(212,175,55,0.5) 0%, rgba(212,175,55,0.2) 100%);
+            transform: scale(1.2);
+        }
+        
+        .marker-arrow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 15px solid #D4AF37;
+        }
+        
+        .marker-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            color: #D4AF37;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            white-space: nowrap;
+            border: 1px solid #D4AF37;
+        }
+        
+        /* Mini Map */
+        #mini-map {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(26,26,26,0.9) 100%);
+            border: 2px solid #D4AF37;
+            border-radius: 15px;
+            overflow: hidden;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        
+        #map-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Help Panel */
+        #help-panel {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(26,26,26,0.9) 100%);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #D4AF37;
+            color: #e0e0e0;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            max-width: 250px;
+        }
+        
+        #help-panel h3 {
+            color: #D4AF37;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+        }
+        
+        .help-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        
+        .help-icon {
+            width: 30px;
+            color: #D4AF37;
+            margin-right: 10px;
+        }
+        
+        /* Transition Overlay */
+        #transition-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 0%, rgba(0,0,0,0.8) 100%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 500;
+            transition: opacity 0.5s ease;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="tour-canvas"></canvas>
+        
+        <!-- Loading Screen -->
+        <div id="loader">
+            <div class="loader-content">
+                <div class="loader-spinner"></div>
+                <div class="loader-text">Loading Luxury Apartment</div>
+            </div>
+        </div>
+        
+        <!-- Room Info -->
+        <div id="room-info">
+            <div id="room-name">Living Room</div>
+            <div id="room-description">
+                Spacious luxury living area with panoramic city views, 
+                Italian leather furniture, and custom lighting design.
+            </div>
+        </div>
+        
+        <!-- Navigation Controls -->
+        <div id="controls">
+            <button class="control-btn" onclick="autoRotate()">Auto Tour</button>
+            <button class="control-btn" onclick="resetView()">Reset View</button>
+            <button class="control-btn" onclick="toggleFullscreen()">Fullscreen</button>
+        </div>
+        
+        <!-- Mini Map -->
+        <div id="mini-map">
+            <canvas id="map-canvas"></canvas>
+        </div>
+        
+        <!-- Help Panel -->
+        <div id="help-panel">
+            <h3>Navigation</h3>
+            <div class="help-item">
+                <span class="help-icon">🖱️</span>
+                <span>Click & drag to look around</span>
+            </div>
+            <div class="help-item">
+                <span class="help-icon">🔄</span>
+                <span>Scroll to zoom in/out</span>
+            </div>
+            <div class="help-item">
+                <span class="help-icon">👆</span>
+                <span>Click markers to move</span>
+            </div>
+            <div class="help-item">
+                <span class="help-icon">⌨️</span>
+                <span>Arrow keys to look</span>
+            </div>
+        </div>
+        
+        <!-- Transition Overlay -->
+        <div id="transition-overlay"></div>
+    </div>
+    
+    <script>
+        // Virtual Tour Application
+        class LuxuryApartmentTour {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.currentRoom = 'living_room';
+                this.isAutoRotating = false;
+                this.rooms = {};
+                this.navigationMarkers = [];
+                this.init();
+            }
+            
+            init() {
+                // Setup Three.js Scene
+                this.setupScene();
+                this.setupCamera();
+                this.setupRenderer();
+                this.setupControls();
+                this.setupLighting();
+                
+                // Load Rooms
+                this.loadRooms();
+                
+                // Setup Navigation
+                this.setupNavigation();
+                
+                // Setup Mini Map
+                this.setupMiniMap();
+                
+                // Start Animation Loop
+                this.animate();
+                
+                // Hide loader after initialization
+                setTimeout(() => {
+                    const loader = document.getElementById('loader');
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 500);
+                }, 2000);
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x000000);
+            }
+            
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(0, 0, 0);
+            }
+            
+            setupRenderer() {
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: document.getElementById('tour-canvas'),
+                    antialias: true,
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 0.8;
+            }
+            
+            setupControls() {
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableZoom = true;
+                this.controls.enablePan = false;
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.rotateSpeed = -0.3;
+                this.controls.minDistance = 1;
+                this.controls.maxDistance = 10;
+                
+                // Mouse sensitivity
+                this.controls.screenSpacePanning = false;
+                this.controls.mouseButtons = {
+                    LEFT: THREE.MOUSE.ROTATE,
+                    MIDDLE: THREE.MOUSE.DOLLY,
+                    RIGHT: null
+                };
+                
+                // Keyboard controls
+                this.setupKeyboardControls();
+            }
+            
+            setupKeyboardControls() {
+                document.addEventListener('keydown', (event) => {
+                    const rotationSpeed = 0.05;
+                    switch(event.key) {
+                        case 'ArrowLeft':
+                            this.controls.rotateLeft(rotationSpeed);
+                            break;
+                        case 'ArrowRight':
+                            this.controls.rotateLeft(-rotationSpeed);
+                            break;
+                        case 'ArrowUp':
+                            this.controls.rotateUp(rotationSpeed);
+                            break;
+                        case 'ArrowDown':
+                            this.controls.rotateUp(-rotationSpeed);
+                            break;
+                    }
+                });
+            }
+            
+            setupLighting() {
+                // Ambient light for overall illumination
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Directional light for shadows and depth
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(5, 5, 5);
+                this.scene.add(directionalLight);
+            }
+            
+            loadRooms() {
+                // Room definitions with sample panoramic images
+                this.rooms = {
+                    living_room: {
+                        name: 'Living Room',
+                        description: 'Spacious luxury living area with panoramic city views',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=4096&h=2048',
+                        connections: [
+                            { to: 'kitchen', label: 'Kitchen', position: { x: 0.3, y: 0.5 } },
+                            { to: 'bedroom', label: 'Master Bedroom', position: { x: 0.7, y: 0.5 } },
+                            { to: 'balcony', label: 'Balcony', position: { x: 0.9, y: 0.5 } }
+                        ]
+                    },
+                    kitchen: {
+                        name: 'Gourmet Kitchen',
+                        description: 'State-of-the-art kitchen with premium appliances',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=4096&h=2048',
+                        connections: [
+                            { to: 'living_room', label: 'Living Room', position: { x: 0.5, y: 0.5 } },
+                            { to: 'dining', label: 'Dining Area', position: { x: 0.2, y: 0.5 } }
+                        ]
+                    },
+                    bedroom: {
+                        name: 'Master Bedroom',
+                        description: 'Luxurious master suite with en-suite bathroom',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=4096&h=2048',
+                        connections: [
+                            { to: 'living_room', label: 'Living Room', position: { x: 0.3, y: 0.5 } },
+                            { to: 'bathroom', label: 'Bathroom', position: { x: 0.7, y: 0.5 } }
+                        ]
+                    },
+                    bathroom: {
+                        name: 'Master Bathroom',
+                        description: 'Spa-inspired bathroom with premium fixtures',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=4096&h=2048',
+                        connections: [
+                            { to: 'bedroom', label: 'Bedroom', position: { x: 0.5, y: 0.5 } }
+                        ]
+                    },
+                    dining: {
+                        name: 'Dining Room',
+                        description: 'Elegant dining space for entertaining',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1549637642-90187f64f420?w=4096&h=2048',
+                        connections: [
+                            { to: 'kitchen', label: 'Kitchen', position: { x: 0.8, y: 0.5 } },
+                            { to: 'living_room', label: 'Living Room', position: { x: 0.2, y: 0.5 } }
+                        ]
+                    },
+                    balcony: {
+                        name: 'Private Balcony',
+                        description: 'Outdoor terrace with breathtaking views',
+                        panoramaUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=4096&h=2048',
+                        connections: [
+                            { to: 'living_room', label: 'Living Room', position: { x: 0.1, y: 0.5 } }
+                        ]
+                    }
+                };
+                
+                // Load initial room
+                this.loadRoom(this.currentRoom);
+            }
+            
+            loadRoom(roomId) {
+                const room = this.rooms[roomId];
+                if (!room) return;
+                
+                // Show transition overlay
+                const overlay = document.getElementById('transition-overlay');
+                overlay.classList.add('active');
+                
+                // Update room info
+                document.getElementById('room-name').textContent = room.name;
+                document.getElementById('room-description').textContent = room.description;
+                
+                // Clear existing panorama
+                this.scene.children = this.scene.children.filter(child => 
+                    child instanceof THREE.Light
+                );
+                
+                // Create panoramic sphere
+                const geometry = new THREE.SphereGeometry(50, 60, 40);
+                geometry.scale(-1, 1, 1);
+                
+                // Load texture
+                const textureLoader = new THREE.TextureLoader();
+                textureLoader.load(
+                    room.panoramaUrl,
+                    (texture) => {
+                        const material = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.BackSide
+                        });
+                        const sphere = new THREE.Mesh(geometry, material);
+                        this.scene.add(sphere);
+                        
+                        // Hide transition overlay
+                        setTimeout(() => {
+                            overlay.classList.remove('active');
+                        }, 300);
+                    },
+                    undefined,
+                    () => {
+                        // On error, use a procedural texture
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 2048;
+                        canvas.height = 1024;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Create gradient background
+                        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                        gradient.addColorStop(0, '#2a2a2a');
+                        gradient.addColorStop(0.5, '#3a3a3a');
+                        gradient.addColorStop(1, '#2a2a2a');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        // Add room name
+                        ctx.fillStyle = '#D4AF37';
+                        ctx.font = 'bold 120px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(room.name, canvas.width / 2, canvas.height / 2);
+                        
+                        const texture = new THREE.CanvasTexture(canvas);
+                        const material = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.BackSide
+                        });
+                        const sphere = new THREE.Mesh(geometry, material);
+                        this.scene.add(sphere);
+                        
+                        overlay.classList.remove('active');
+                    }
+                );
+                
+                // Update current room
+                this.currentRoom = roomId;
+                
+                // Setup navigation markers
+                this.setupRoomMarkers(room);
+                
+                // Update mini map
+                this.updateMiniMap();
+            }
+            
+            setupRoomMarkers(room) {
+                // Clear existing markers
+                this.navigationMarkers.forEach(marker => {
+                    document.body.removeChild(marker.element);
+                });
+                this.navigationMarkers = [];
+                
+                // Create new markers for room connections
+                room.connections.forEach(connection => {
+                    const marker = this.createNavigationMarker(connection);
+                    this.navigationMarkers.push(marker);
+                });
+            }
+            
+            createNavigationMarker(connection) {
+                const markerDiv = document.createElement('div');
+                markerDiv.className = 'navigation-marker';
+                markerDiv.style.display = 'none'; // Initially hidden
+                
+                const circle = document.createElement('div');
+                circle.className = 'marker-circle';
+                
+                const arrow = document.createElement('div');
+                arrow.className = 'marker-arrow';
+                
+                const label = document.createElement('div');
+                label.className = 'marker-label';
+                label.textContent = connection.label;
+                
+                circle.appendChild(arrow);
+                markerDiv.appendChild(circle);
+                markerDiv.appendChild(label);
+                
+                markerDiv.addEventListener('click', () => {
+                    this.loadRoom(connection.to);
+                });
+                
+                document.body.appendChild(markerDiv);
+                
+                return {
+                    element: markerDiv,
+                    connection: connection,
+                    position3D: this.convertToSphereCoords(connection.position)
+                };
+            }
+            
+            convertToSphereCoords(position) {
+                const phi = position.x * Math.PI * 2;
+                const theta = position.y * Math.PI;
+                
+                const radius = 10;
+                const x = radius * Math.sin(theta) * Math.cos(phi);
+                const y = radius * Math.cos(theta);
+                const z = radius * Math.sin(theta) * Math.sin(phi);
+                
+                return new THREE.Vector3(x, y, z);
+            }
+            
+            updateMarkerPositions() {
+                this.navigationMarkers.forEach(marker => {
+                    const screenPos = this.worldToScreen(marker.position3D);
+                    
+                    if (screenPos.visible) {
+                        marker.element.style.display = 'block';
+                        marker.element.style.left = `${screenPos.x - 30}px`;
+                        marker.element.style.top = `${screenPos.y - 30}px`;
+                    } else {
+                        marker.element.style.display = 'none';
+                    }
+                });
+            }
+            
+            worldToScreen(position) {
+                const vector = position.clone();
+                vector.project(this.camera);
+                
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                const visible = vector.z < 1;
+                
+                return { x, y, visible };
+            }
+            
+            setupNavigation() {
+                // Navigation is handled through markers and controls
+            }
+            
+            setupMiniMap() {
+                const canvas = document.getElementById('map-canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 200;
+                canvas.height = 200;
+                
+                this.updateMiniMap();
+            }
+            
+            updateMiniMap() {
+                const canvas = document.getElementById('map-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw apartment layout
+                ctx.strokeStyle = '#D4AF37';
+                ctx.lineWidth = 2;
+                
+                // Simple floor plan representation
+                const rooms = [
+                    { x: 50, y: 50, w: 60, h: 40, id: 'living_room' },
+                    { x: 110, y: 50, w: 40, h: 40, id: 'kitchen' },
+                    { x: 50, y: 90, w: 60, h: 40, id: 'bedroom' },
+                    { x: 110, y: 90, w: 40, h: 40, id: 'bathroom' },
+                    { x: 50, y: 130, w: 40, h: 30, id: 'dining' },
+                    { x: 150, y: 50, w: 30, h: 30, id: 'balcony' }
+                ];
+                
+                rooms.forEach(room => {
+                    if (room.id === this.currentRoom) {
+                        ctx.fillStyle = 'rgba(212, 175, 55, 0.3)';
+                        ctx.fillRect(room.x, room.y, room.w, room.h);
+                    }
+                    ctx.strokeRect(room.x, room.y, room.w, room.h);
+                });
+                
+                // Draw current position indicator
+                const currentRoomData = rooms.find(r => r.id === this.currentRoom);
+                if (currentRoomData) {
+                    ctx.fillStyle = '#D4AF37';
+                    ctx.beginPath();
+                    ctx.arc(
+                        currentRoomData.x + currentRoomData.w / 2,
+                        currentRoomData.y + currentRoomData.h / 2,
+                        5,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                // Update controls
+                this.controls.update();
+                
+                // Auto-rotation if enabled
+                if (this.isAutoRotating) {
+                    this.controls.rotateLeft(0.002);
+                }
+                
+                // Update marker positions
+                this.updateMarkerPositions();
+                
+                // Render scene
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+        
+        // Global functions for controls
+        let tour = null;
+        
+        function autoRotate() {
+            tour.isAutoRotating = !tour.isAutoRotating;
+            event.target.textContent = tour.isAutoRotating ? 'Stop Tour' : 'Auto Tour';
+        }
+        
+        function resetView() {
+            tour.controls.reset();
+            tour.camera.position.set(0, 0, 0);
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // Initialize tour when page loads
+        window.addEventListener('load', () => {
+            tour = new LuxuryApartmentTour();
+            
+            // Handle window resize
+            window.addEventListener('resize', () => tour.onWindowResize());
+        });
+    </script>
+</body>
+</html>

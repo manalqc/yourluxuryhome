@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Panorama</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #panorama-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+        }
+        
+        #panorama-container:active {
+            cursor: grabbing;
+        }
+        
+        #panorama-image {
+            position: absolute;
+            height: 100%;
+            min-width: 200%;
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+            object-fit: cover;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #D4AF37;
+            font-size: 1.2em;
+            z-index: 100;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .control-btn {
+            background: rgba(212, 175, 55, 0.9);
+            color: #000;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            background: #D4AF37;
+            transform: scale(1.1);
+        }
+        
+        .room-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #D4AF37;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid #D4AF37;
+            max-width: 300px;
+            z-index: 1000;
+        }
+        
+        .room-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .room-description {
+            color: #ccc;
+            font-size: 0.9em;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #ccc;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            max-width: 200px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="panorama-container">
+        <div class="loading" id="loading">Loading 360° View...</div>
+        <img id="panorama-image" alt="360° Panorama" style="display: none;">
+        
+        <div class="room-info">
+            <div class="room-name" id="room-name">Room</div>
+            <div class="room-description" id="room-description">Exploring the space...</div>
+        </div>
+        
+        <div class="instructions">
+            💡 Drag to explore • Scroll to zoom
+        </div>
+        
+        <div class="controls">
+            <button class="control-btn" onclick="resetView()" title="Reset View">🏠</button>
+            <button class="control-btn" onclick="zoomIn()" title="Zoom In">➕</button>
+            <button class="control-btn" onclick="zoomOut()" title="Zoom Out">➖</button>
+        </div>
+    </div>
+
+    <script>
+        let panoramaImage = document.getElementById('panorama-image');
+        let container = document.getElementById('panorama-container');
+        let loading = document.getElementById('loading');
+        
+        let currentX = 0;
+        let currentY = 0;
+        let currentScale = 1;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Get panoramic image URL from query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const imageUrl = urlParams.get('imageUrl') || '/media/virtual_tour/panoramas/upscalemedia-transformed.jpeg';
+        const roomName = urlParams.get('roomName') || 'Virtual Tour Room';
+        const roomDescription = urlParams.get('roomDescription') || 'Explore this beautiful space in 360°';
+        
+        // Update room info
+        document.getElementById('room-name').textContent = roomName;
+        document.getElementById('room-description').textContent = roomDescription;
+        
+        // Load the panoramic image
+        panoramaImage.onload = function() {
+            loading.style.display = 'none';
+            panoramaImage.style.display = 'block';
+            
+            // Calculate proper width for panoramic image (maintain aspect ratio)
+            const containerHeight = container.offsetHeight;
+            panoramaImage.style.width = (containerHeight * 2) + 'px'; // 2:1 aspect ratio for equirectangular
+            panoramaImage.style.left = '0px';
+            panoramaImage.style.top = '0px';
+            
+            updateTransform();
+        };
+        
+        panoramaImage.onerror = function() {
+            loading.textContent = 'Failed to load panoramic image';
+            loading.style.color = '#ff6b6b';
+        };
+        
+        // Load the image with full URL
+        const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `http://localhost:8000${imageUrl}`;
+        console.log('Loading panoramic image:', fullImageUrl);
+        panoramaImage.src = fullImageUrl;
+        
+        // Mouse/Touch event handlers
+        container.addEventListener('mousedown', startDrag);
+        container.addEventListener('mousemove', handleDrag);
+        container.addEventListener('mouseup', endDrag);
+        container.addEventListener('mouseleave', endDrag);
+        
+        // Touch events for mobile
+        container.addEventListener('touchstart', startDragTouch);
+        container.addEventListener('touchmove', handleDragTouch);
+        container.addEventListener('touchend', endDrag);
+        
+        // Scroll for zoom
+        container.addEventListener('wheel', handleZoom);
+        
+        function startDrag(e) {
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            lastX = currentX;
+            lastY = currentY;
+            container.style.cursor = 'grabbing';
+        }
+        
+        function handleDrag(e) {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - dragStartX;
+            const deltaY = e.clientY - dragStartY;
+            
+            currentX = lastX + deltaX;
+            currentY = Math.max(-50, Math.min(50, lastY + deltaY)); // Limit vertical movement
+            
+            updateTransform();
+        }
+        
+        function endDrag() {
+            isDragging = false;
+            container.style.cursor = 'grab';
+        }
+        
+        function startDragTouch(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            startDrag({clientX: touch.clientX, clientY: touch.clientY});
+        }
+        
+        function handleDragTouch(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleDrag({clientX: touch.clientX, clientY: touch.clientY});
+        }
+        
+        function handleZoom(e) {
+            e.preventDefault();
+            
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            currentScale = Math.max(0.5, Math.min(3, currentScale + delta));
+            
+            updateTransform();
+        }
+        
+        function updateTransform() {
+            // For panoramic images, we want smooth horizontal wrapping
+            const imageWidth = parseInt(panoramaImage.style.width);
+            const containerWidth = container.offsetWidth;
+            
+            // Wrap the image horizontally for seamless 360° experience
+            if (currentX > 0) {
+                currentX = currentX - imageWidth;
+            } else if (currentX < -(imageWidth - containerWidth)) {
+                currentX = currentX + imageWidth;
+            }
+            
+            panoramaImage.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+        }
+        
+        function resetView() {
+            currentX = 0;
+            currentY = 0;
+            currentScale = 1;
+            updateTransform();
+        }
+        
+        function zoomIn() {
+            currentScale = Math.min(3, currentScale + 0.2);
+            updateTransform();
+        }
+        
+        function zoomOut() {
+            currentScale = Math.max(0.5, currentScale - 0.2);
+            updateTransform();
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const containerHeight = container.offsetHeight;
+            panoramaImage.style.width = (containerHeight * 2) + 'px';
+            updateTransform();
+        });
+    </script>
+</body>
+</html>

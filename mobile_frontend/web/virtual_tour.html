@@ -350,7 +350,7 @@
         // Load tour data from API
         async function loadTourData(apiBase, apartmentId) {
             try {
-                const response = await fetch(`${apiBase}/api/v1/apartments/${apartmentId}/virtual_tour/`);
+                const response = await fetch(`${apiBase}/api/v1/apartments/apartments/${apartmentId}/virtual_tour/`);
                 const data = await response.json();
                 apartmentData = data;
                 rooms = data.rooms || [];
