@@ -264,7 +264,9 @@ class RoomConnectionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'to_room', 'to_room_name', 'to_room_type',
             'hotspot_x', 'hotspot_y', 'direction_label',
-            'transition_yaw', 'transition_pitch'
+            'icon', 'hotspot_size', 'hotspot_color',
+            'transition_yaw', 'transition_pitch', 'transition_animation',
+            'is_active', 'show_on_hover', 'pulse_animation'
         ]
 
 
@@ -315,7 +317,9 @@ class RoomConnectionCreateSerializer(serializers.ModelSerializer):
         model = RoomConnection
         fields = [
             'from_room', 'to_room', 'hotspot_x', 'hotspot_y',
-            'direction_label', 'transition_yaw', 'transition_pitch'
+            'direction_label', 'icon', 'hotspot_size', 'hotspot_color',
+            'transition_yaw', 'transition_pitch', 'transition_animation',
+            'is_active', 'show_on_hover', 'pulse_animation'
         ]
     
     def validate(self, data):

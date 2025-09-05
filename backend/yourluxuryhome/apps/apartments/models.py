@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from django.core.files.images import get_image_dimensions
+from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
 from datetime import date
 from apps.services.models import Service
@@ -250,19 +251,35 @@ class RoomConnection(models.Model):
     from_room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, related_name='connections_from')
     to_room = models.ForeignKey(VirtualTourRoom, on_delete=models.CASCADE, related_name='connections_to')
     
-    # Hotspot position in the panoramic image (normalized coordinates 0-1)
-    hotspot_x = models.FloatField(help_text=_('X position of hotspot (0.0 to 1.0)'))
-    hotspot_y = models.FloatField(help_text=_('Y position of hotspot (0.0 to 1.0)'))
+    # Hotspot position in the panoramic image (percentage-based 0-100)
+    hotspot_x = models.FloatField(help_text=_('X position of hotspot (0.0 to 100.0 percent)'),
+                                   validators=[MinValueValidator(0.0), MaxValueValidator(100.0)])
+    hotspot_y = models.FloatField(help_text=_('Y position of hotspot (0.0 to 100.0 percent)'),
+                                   validators=[MinValueValidator(0.0), MaxValueValidator(100.0)])
     
     # Direction label for UI
     direction_label = models.CharField(max_length=50, blank=True, null=True, 
                                      help_text=_('Label for the connection (e.g., "To Kitchen", "Exit to Balcony")'))
     
+    # Hotspot appearance
+    icon = models.CharField(max_length=50, default='door', 
+                           help_text=_('Icon type: door, archway, stairs, elevator, balcony'))
+    hotspot_size = models.IntegerField(default=50, help_text=_('Size of hotspot in pixels'))
+    hotspot_color = models.CharField(max_length=7, default='#d9b38a', help_text=_('Hotspot color in hex'))
+    
     # Transition settings
     transition_yaw = models.FloatField(default=0.0, help_text=_('Target viewing angle after transition'))
     transition_pitch = models.FloatField(default=0.0, help_text=_('Target pitch angle after transition'))
+    transition_animation = models.CharField(max_length=20, default='fade', 
+                                           choices=(('fade', 'Fade'), ('slide', 'Slide'), ('zoom', 'Zoom')))
+    
+    # Display settings
+    is_active = models.BooleanField(default=True, help_text=_('Whether this connection is active'))
+    show_on_hover = models.BooleanField(default=True, help_text=_('Show label on hover'))
+    pulse_animation = models.BooleanField(default=True, help_text=_('Show pulse animation'))
     
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         verbose_name = _('Room Connection')

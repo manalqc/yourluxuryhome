@@ -2,6 +2,12 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.forms import ModelForm, NumberInput
+from django.urls import path, reverse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
 from .models import (
     Apartment, 
     ApartmentCategory, 
@@ -193,14 +199,14 @@ class RoomConnectionInline(admin.TabularInline):
 
 @admin.register(VirtualTourRoom)
 class VirtualTourRoomAdmin(admin.ModelAdmin):
-    """Admin interface for Virtual Tour Rooms."""
+    """Admin interface for Virtual Tour Rooms with Visual Hotspot Editor."""
     form = VirtualTourRoomInlineForm
-    list_display = ['apartment', 'name', 'room_type', 'order', 'image_preview', 'is_starting_room', 'created_at']
+    list_display = ['apartment', 'name', 'room_type', 'order', 'image_preview', 'hotspot_editor_button', 'is_starting_room', 'created_at']
     list_filter = ['apartment', 'room_type', 'is_starting_room']
     search_fields = ['apartment__name', 'name', 'description']
     list_editable = ['order', 'is_starting_room']
     inlines = [VirtualTourHotspotInline, RoomConnectionInline]
-    readonly_fields = ['created_at', 'updated_at', 'image_preview_large']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview_large', 'hotspot_editor_button']
     
     fieldsets = (
         ('Basic Information', {
@@ -247,6 +253,136 @@ class VirtualTourRoomAdmin(admin.ModelAdmin):
             )
         return "No image uploaded"
     image_preview_large.short_description = "Current Image"
+    
+    def hotspot_editor_button(self, obj):
+        """Button to launch the visual hotspot editor."""
+        if obj.pk and obj.panoramic_image:
+            url = reverse('admin:apartments_virtualtourroom_hotspot_editor', args=[obj.pk])
+            return format_html(
+                '<a class="button" href="{}" style="background: #d9b38a; color: #000; font-weight: bold; padding: 5px 10px; text-decoration: none; border-radius: 4px;">'
+                '🎯 Visual Hotspot Editor'
+                '</a>',
+                url
+            )
+        return "Save room first to add hotspots"
+    hotspot_editor_button.short_description = "Hotspot Editor"
+    
+    def get_urls(self):
+        """Add custom URL patterns for the hotspot editor."""
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<path:object_id>/hotspot-editor/',
+                self.admin_site.admin_view(self.hotspot_editor_view),
+                name='apartments_virtualtourroom_hotspot_editor'
+            ),
+            path(
+                '<path:object_id>/save-hotspot/',
+                self.admin_site.admin_view(self.save_hotspot_ajax),
+                name='apartments_virtualtourroom_save_hotspot'
+            ),
+            path(
+                '<path:object_id>/delete-hotspot/<int:hotspot_id>/',
+                self.admin_site.admin_view(self.delete_hotspot_ajax),
+                name='apartments_virtualtourroom_delete_hotspot'
+            ),
+            path(
+                '<path:object_id>/update-hotspot-position/<int:connection_id>/',
+                self.admin_site.admin_view(self.update_hotspot_position_ajax),
+                name='apartments_virtualtourroom_update_hotspot_position'
+            ),
+        ]
+        return custom_urls + urls
+    
+    def hotspot_editor_view(self, request, object_id):
+        """Custom view for the visual hotspot editor."""
+        room = get_object_or_404(VirtualTourRoom, pk=object_id)
+        available_rooms = VirtualTourRoom.objects.filter(
+            apartment=room.apartment
+        ).exclude(pk=room.pk)
+        
+        context = {
+            'room': room,
+            'available_rooms': available_rooms,
+            'existing_connections': room.connections_from.all().select_related('to_room'),
+            'opts': self.model._meta,
+            'has_view_permission': True,
+            'has_change_permission': True,
+            'has_delete_permission': True,
+            'title': f'Visual Hotspot Editor - {room.name}',
+            'site_header': self.admin_site.site_header,
+            'site_title': self.admin_site.site_title,
+        }
+        
+        return render(request, 'admin/apartments/hotspot_editor.html', context)
+    
+    def save_hotspot_ajax(self, request, object_id):
+        """AJAX endpoint to save a new hotspot connection."""
+        if request.method == 'POST':
+            try:
+                data = json.loads(request.body)
+                room = get_object_or_404(VirtualTourRoom, pk=object_id)
+                
+                # Create the connection
+                connection = RoomConnection.objects.create(
+                    from_room=room,
+                    to_room_id=data['to_room_id'],
+                    hotspot_x=data['x'],
+                    hotspot_y=data['y'],
+                    direction_label=data.get('label', ''),
+                    icon=data.get('icon', 'door'),
+                    hotspot_color=data.get('color', '#d9b38a'),
+                    hotspot_size=data.get('size', 50),
+                    transition_animation=data.get('transition', 'fade')
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'connection_id': connection.id,
+                    'message': 'Hotspot created successfully'
+                })
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    
+    def delete_hotspot_ajax(self, request, object_id, hotspot_id):
+        """AJAX endpoint to delete a hotspot connection."""
+        if request.method == 'DELETE':
+            try:
+                room = get_object_or_404(VirtualTourRoom, pk=object_id)
+                connection = get_object_or_404(RoomConnection, pk=hotspot_id, from_room=room)
+                connection.delete()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Hotspot deleted successfully'
+                })
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    
+    def update_hotspot_position_ajax(self, request, object_id, connection_id):
+        """AJAX endpoint to update hotspot position after dragging."""
+        if request.method == 'POST':
+            try:
+                data = json.loads(request.body)
+                room = get_object_or_404(VirtualTourRoom, pk=object_id)
+                connection = get_object_or_404(RoomConnection, pk=connection_id, from_room=room)
+                
+                connection.hotspot_x = data['x']
+                connection.hotspot_y = data['y']
+                connection.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Position updated successfully'
+                })
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
 
 
 @admin.register(VirtualTourHotspot)
